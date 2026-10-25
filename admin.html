@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Albert Shop — Admin</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+    :root {
+      --bg:#000; --surface:#111; --surface2:#1a1a1a; --border:#222;
+      --error:#ff3b30; --text:#fff; --text-secondary:#8e8e93;
+      --accent:#2f80ed; --green:#24b24b; --radius:16px; --radius-sm:12px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+    html,body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;overflow-x:hidden;}
+    a{color:var(--accent);text-decoration:none;}
+
+    /* LOGIN */
+    .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+    .login-card{width:100%;max-width:360px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;}
+    .login-title{font-size:20px;font-weight:900;margin-bottom:4px;}
+    .login-sub{font-size:13px;color:var(--text-secondary);margin-bottom:18px;}
+    .login-err{color:#ff3b30;font-size:12px;min-height:16px;margin-bottom:10px;line-height:1.4;}
+
+    /* HEADER */
+    .header{display:flex;align-items:center;justify-content:space-between;padding:calc(14px + env(safe-area-inset-top,0px)) 16px 14px;position:sticky;top:0;background:rgba(0,0,0,0.88);backdrop-filter:blur(24px);z-index:100;border-bottom:1px solid rgba(255,255,255,0.05);}
+    .header-title{font-size:17px;font-weight:800;letter-spacing:-0.3px;}
+    .header-right{display:flex;gap:8px;align-items:center;}
+    .btn-back-shop{background:var(--surface2);border:1px solid var(--border);color:#fff;padding:8px 14px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-family:inherit;}
+
+    /* STATS + TABS */
+    .admin-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:14px 16px;}
+    .admin-stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:11px;}
+    .admin-stat-label{font-size:9px;color:var(--text-secondary);text-transform:uppercase;font-weight:700;margin-bottom:3px;letter-spacing:0.5px;}
+    .admin-stat-val{font-size:18px;font-weight:900;}
+    .tabs{display:flex;gap:8px;overflow-x:auto;padding:2px 16px 14px;scrollbar-width:none;scroll-behavior:smooth;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 34px),transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 34px),transparent 100%);}
+    .tabs::-webkit-scrollbar{display:none;}
+    .tab-btn{flex-shrink:0;scroll-snap-align:center;background:var(--surface);border:1px solid var(--border);color:#c9c9ce;padding:10px 17px;border-radius:22px;font:700 13px Inter,sans-serif;cursor:pointer;transition:background .25s,color .25s,transform .25s,box-shadow .25s,border-color .25s;}
+    .tab-btn:active{transform:scale(0.96);}
+    .tab-btn.active{background:linear-gradient(135deg,#ffffff,#dfe6f2);color:#000;border-color:#fff;transform:scale(1.04);box-shadow:0 4px 18px rgba(255,255,255,0.18);}
+    .search-input{width:100%;background:var(--bg);border:1px solid var(--border);color:#fff;padding:12px 14px 12px 40px;border-radius:14px;font:500 14px Inter,sans-serif;outline:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4.3-4.3'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:13px center;}
+    .search-input:focus{border-color:var(--accent);}
+    .fchips{display:flex;gap:8px;margin:12px 0 10px;flex-wrap:wrap;}
+    .fchip{background:var(--surface2);border:1px solid var(--border);color:#c9c9ce;padding:7px 13px;border-radius:18px;font:600 12px Inter,sans-serif;cursor:pointer;transition:all .2s;}
+    .fchip.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+    .users-count{font-size:12px;color:var(--text-secondary);margin-bottom:6px;}
+    .panel{display:none;padding-bottom:40px;}
+    .panel.active{display:block;}
+
+    /* PRODUCTS */
+    .admin-section-head{font-size:15px;font-weight:800;padding:6px 16px 10px;display:flex;align-items:center;justify-content:space-between;}
+    .btn-admin-add{background:var(--accent);color:#fff;border:none;padding:8px 15px;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+    .admin-prod-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin:0 16px 9px;padding:13px;display:grid;grid-template-columns:52px 1fr auto;gap:11px;align-items:center;}
+    .admin-prod-img{width:52px;height:52px;border-radius:9px;object-fit:cover;background:var(--surface2);}
+    .admin-prod-placeholder{width:52px;height:52px;border-radius:9px;background:var(--surface2);border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;}
+    .admin-prod-name{font-size:13px;font-weight:700;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .admin-prod-meta{font-size:11px;color:var(--text-secondary);margin-bottom:4px;}
+    .admin-prod-tags{display:flex;gap:4px;flex-wrap:wrap;}
+    .atag{padding:2px 6px;border-radius:20px;font-size:10px;font-weight:700;}
+    .atag-cat{background:rgba(47,128,237,0.15);color:var(--accent);border:1px solid rgba(47,128,237,0.3);}
+    .atag-price{background:rgba(36,178,75,0.15);color:#24b24b;border:1px solid rgba(36,178,75,0.3);}
+    .atag-size{background:var(--surface2);color:var(--text-secondary);border:1px solid var(--border);}
+    .atag-sold{background:rgba(255,59,48,0.15);color:#ff3b30;border:1px solid rgba(255,59,48,0.3);}
+    .admin-prod-btns{display:flex;flex-direction:column;gap:5px;}
+    .btn-a-edit{background:var(--surface2);border:1px solid var(--border);color:#fff;padding:5px 10px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;}
+    .btn-a-del{background:rgba(255,59,48,0.1);border:1px solid rgba(255,59,48,0.3);color:#ff3b30;padding:5px 10px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;}
+    .btn-a-ok{background:rgba(36,178,75,0.12);border:1px solid rgba(36,178,75,0.3);color:#24b24b;padding:5px 10px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;}
+    .import-box{margin:0 16px 12px;background:rgba(255,204,0,0.08);border:1px solid rgba(255,204,0,0.25);border-radius:var(--radius);padding:12px 14px;font-size:12px;line-height:1.5;color:#f3f3f3;}
+    .import-box button{margin-top:8px;}
+
+    /* GENERIC BOX / ORDERS / USERS / BRANDS */
+    .box{margin:0 16px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
+    .ord-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:14px;}
+    .ord-total{font-weight:900;font-size:16px;}
+    .ord-meta{font-size:12px;color:var(--text-secondary);margin-bottom:3px;line-height:1.45;word-break:break-word;}
+    .ord-item{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-top:1px solid rgba(255,255,255,0.05);}
+    .ord-item:first-of-type{margin-top:8px;}
+    .ord-actions{display:flex;gap:8px;margin-top:10px;align-items:center;}
+    .ord-actions select{flex:1;}
+    .user-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--border);font-size:13px;}
+    .user-row:first-child{border-top:none;}
+    .user-sub{font-size:11px;color:var(--text-secondary);margin-top:2px;}
+    .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
+    .chip{display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:6px 10px;font-size:12px;}
+    .chip b{cursor:pointer;color:var(--error);}
+    .row-add{display:flex;gap:8px;}
+    .row-add input{flex:1;}
+
+    /* MODAL */
+    .amodal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.93);display:none;align-items:flex-start;justify-content:center;padding:14px;z-index:300;overflow-y:auto;backdrop-filter:blur(10px);}
+    .amodal-overlay.show{display:flex;}
+    .amodal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:500px;padding:22px;margin:auto;}
+    .amodal-title{font-size:16px;font-weight:800;margin-bottom:18px;}
+    .aform-group{margin-bottom:13px;}
+    .aform-label{font-size:11px;font-weight:700;color:#aaa;margin-bottom:4px;display:block;text-transform:uppercase;letter-spacing:0.4px;}
+    .aform-label span{color:#ff3b30;}
+    .aform-input,.aform-textarea,.aform-select{width:100%;background:var(--bg);border:1px solid var(--border);color:#fff;padding:10px 12px;border-radius:var(--radius-sm);font-size:14px;outline:none;font-family:inherit;}
+    .aform-textarea{resize:vertical;min-height:75px;}
+    .aform-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .img-list{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;}
+    .img-row{display:flex;gap:6px;align-items:center;}
+    .img-row input{flex:1;min-width:0;}
+    .img-thumb{width:36px;height:36px;border-radius:6px;object-fit:cover;background:var(--surface2);flex-shrink:0;}
+    .btn-rm-img{background:rgba(255,59,48,0.1);border:1px solid rgba(255,59,48,0.3);color:#ff3b30;width:30px;height:30px;border-radius:7px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .photo-btns{display:flex;gap:6px;}
+    .btn-upload{flex:1;background:var(--accent);color:#fff;border:none;padding:10px;border-radius:var(--radius-sm);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+    .btn-upload:disabled{opacity:0.6;}
+    .btn-add-img-row{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text-secondary);padding:10px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;}
+    .sz-row{display:flex;gap:6px;}
+    .sz-row input{flex:1;}
+    .btn-sz-add{background:var(--accent);color:#fff;border:none;padding:9px 13px;border-radius:var(--radius-sm);font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;font-family:inherit;}
+    .sz-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;}
+    .sz-tag{background:var(--surface2);border:1px solid var(--border);padding:4px 9px;border-radius:20px;font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px;}
+    .sz-x{color:#ff3b30;cursor:pointer;font-size:12px;}
+    .amodal-actions{display:flex;gap:9px;margin-top:18px;}
+    .btn-asave{flex:1;background:var(--accent);color:#fff;border:none;padding:13px;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;}
+    .btn-asave:disabled{opacity:0.6;}
+    .btn-acancel{flex:1;background:none;border:1px solid var(--border);color:var(--text-secondary);padding:13px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
+
+    /* CONFIRM */
+    .adel-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.88);display:none;align-items:center;justify-content:center;padding:24px;z-index:400;backdrop-filter:blur(8px);}
+    .adel-overlay.show{display:flex;}
+    .adel-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:26px;width:100%;max-width:300px;text-align:center;}
+    .adel-icon{font-size:32px;margin-bottom:9px;}
+    .adel-text{font-size:14px;font-weight:700;margin-bottom:3px;}
+    .adel-sub{font-size:12px;color:var(--text-secondary);margin-bottom:20px;word-break:break-word;}
+    .adel-btns{display:flex;gap:9px;}
+    .btn-adel-yes{flex:1;background:#ff3b30;color:#fff;border:none;padding:12px;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+    .btn-adel-no{flex:1;background:none;border:1px solid var(--border);color:var(--text-secondary);padding:12px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
+
+    /* TOAST */
+    .toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);background:rgba(255,59,48,0.95);color:#fff;padding:11px 22px;border-radius:28px;font-size:13px;font-weight:600;opacity:0;pointer-events:none;transition:opacity 0.3s,transform 0.3s;z-index:500;text-align:center;width:88%;max-width:380px;}
+    .toast.success-toast{background:rgba(36,178,75,0.95);}
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(8px);}
+    .empty-state{text-align:center;padding:40px;color:var(--text-secondary);font-size:13px;}
+  </style>
+</head>
+<body>
+
+  <!-- LOGIN -->
+  <div id="loginScreen" class="login-wrap" style="display:none;">
+    <div class="login-card">
+      <div class="login-title">⚙️ Albert Shop</div>
+      <div class="login-sub">Вход в админ-панель</div>
+      <div class="aform-group"><label class="aform-label">Email</label><input type="email" id="loginEmail" class="aform-input" autocomplete="username" placeholder="you@example.com"></div>
+      <div class="aform-group"><label class="aform-label">Пароль</label><input type="password" id="loginPass" class="aform-input" autocomplete="current-password" placeholder="••••••••"></div>
+      <div class="login-err" id="loginErr"></div>
+      <button class="btn-asave" style="width:100%;" id="loginBtn">Войти</button>
+    </div>
+  </div>
+
+  <!-- APP -->
+  <div id="app" style="display:none;">
+    <header class="header">
+      <div class="header-title">⚙️ Admin — Albert Shop</div>
+      <div class="header-right">
+        <a class="btn-back-shop" id="backShop" href="#" style="display:none;">← В магазин</a>
+        <button class="btn-back-shop" data-act="refresh" title="Обновить">↻</button>
+        <button class="btn-back-shop" data-act="logout">Выйти</button>
+      </div>
+    </header>
+
+    <div class="admin-stats" id="statsBox"></div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="Products">Товары</button>
+      <button class="tab-btn" data-tab="Orders">Заказы</button>
+      <button class="tab-btn" data-tab="Users">Клиенты</button>
+      <button class="tab-btn" data-tab="Brands">Бренды</button>
+      <button class="tab-btn" data-tab="Broadcast">Рассылка</button>
+    </div>
+
+    <!-- PRODUCTS -->
+    <div class="panel active" id="panelProducts">
+      <div class="admin-section-head">Товары<button class="btn-admin-add" data-act="addProduct">+ Добавить</button></div>
+      <div id="importBox"></div>
+      <div id="adminProdList"></div>
+    </div>
+
+    <!-- ORDERS -->
+    <div class="panel" id="panelOrders">
+      <div class="admin-section-head">Заказы</div>
+      <div id="ordersList"></div>
+    </div>
+
+    <!-- USERS -->
+    <div class="panel" id="panelUsers">
+      <div class="admin-section-head">Клиенты (бан / разбан)</div>
+      <div class="box">
+        <input type="search" class="search-input" id="userSearch" placeholder="Поиск: ID, имя или @ник" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <div class="fchips">
+          <button class="fchip active" data-act="userFilter" data-f="all">Все</button>
+          <button class="fchip" data-act="userFilter" data-f="tg">Из Telegram</button>
+          <button class="fchip" data-act="userFilter" data-f="banned">Забаненные</button>
+        </div>
+        <div class="users-count" id="usersCount"></div>
+        <div id="usersList"></div>
+      </div>
+    </div>
+
+    <!-- BRANDS -->
+    <div class="panel" id="panelBrands">
+      <div class="admin-section-head">Бренды (появляются в фильтрах магазина)</div>
+      <div class="box">
+        <div class="chips" id="brandChips"></div>
+        <div class="row-add">
+          <input type="text" class="aform-input" id="brandInput" placeholder="Новый бренд">
+          <button class="btn-admin-add" data-act="addBrand">Добавить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- BROADCAST -->
+    <div class="panel" id="panelBroadcast">
+      <div class="admin-section-head">Рассылка по клиентам бота</div>
+      <div class="box">
+        <div class="ord-meta" id="bcCount" style="margin-bottom:12px;">Получателей: …</div>
+        <div class="aform-group"><label class="aform-label">Текст сообщения <span>*</span></label>
+          <textarea class="aform-textarea" id="bcText" style="min-height:120px;" maxlength="4000" placeholder="Новое поступление! Загляни в каталог"></textarea></div>
+        <div class="aform-group"><label class="aform-label">Фото (необязательно, тогда текст до 1000 символов)</label>
+          <div id="bcPhotoBox" style="margin-bottom:8px;"></div>
+          <div class="photo-btns"><button class="btn-upload" type="button" id="bcUpload">📷 Загрузить фото</button><button class="btn-add-img-row" type="button" data-act="bcClearPhoto">Убрать</button></div>
+          <input type="file" id="bcFile" accept="image/*" style="display:none;"></div>
+        <div class="aform-row">
+          <div class="aform-group"><label class="aform-label">Текст кнопки</label><input type="text" class="aform-input" id="bcBtnText" value="КАТАЛОГ" maxlength="30"></div>
+          <div class="aform-group"><label class="aform-label">Кнопка ведёт</label><input type="text" class="aform-input" id="bcBtnUrl" placeholder="адрес магазина"></div>
+        </div>
+        <div class="aform-group"><label class="aform-label">Тест: только на эти ID (через запятую)</label><input type="text" class="aform-input" id="bcOnly" placeholder="пусто = всем"></div>
+        <div class="ord-meta" id="bcProgress" style="margin-bottom:10px;"></div>
+        <button class="btn-asave" style="width:100%;" type="button" id="bcSend" data-act="bcSend">Отправить рассылку</button>
+        <div class="ord-meta" style="margin-top:10px;">Получают те, кто открывал магазин в Telegram и не забанен. Кто заблокировал бота, сообщение не получит.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD/EDIT MODAL -->
+  <div class="amodal-overlay" id="aModalOverlay">
+    <div class="amodal">
+      <div class="amodal-title" id="aModalTitle">Добавить товар</div>
+      <div class="aform-group"><label class="aform-label">Название <span>*</span></label><input type="text" class="aform-input" id="afName" placeholder="Кроссовки Nike Air Max"></div>
+      <div class="aform-row">
+        <div class="aform-group"><label class="aform-label">Цена (₽) <span>*</span></label><input type="number" class="aform-input" id="afPrice" placeholder="9990"></div>
+        <div class="aform-group"><label class="aform-label">Остаток (шт.) <span>*</span></label><input type="number" class="aform-input" id="afStock" placeholder="1" min="0"></div>
+      </div>
+      <div class="aform-group"><label class="aform-label">Категория <span>*</span></label><select class="aform-select" id="afCat"></select></div>
+      <div class="aform-row">
+        <div class="aform-group"><label class="aform-label">Бренд</label><input type="text" class="aform-input" id="afBrand" placeholder="Palm Angels, Gucci..." list="afBrandList"><datalist id="afBrandList"></datalist></div>
+        <div class="aform-group"><label class="aform-label">Состояние</label><input type="text" class="aform-input" id="afCondition" placeholder="9/10"></div>
+      </div>
+      <div class="aform-group"><label class="aform-label">Комплект</label><input type="text" class="aform-input" id="afComplect" placeholder="Отсутствует / В комплекте"></div>
+      <div class="aform-group"><label class="aform-label">Описание</label><textarea class="aform-textarea" id="afDesc" placeholder="Оригинал&#10;Состояние: 10/10"></textarea></div>
+      <div class="aform-group"><label class="aform-label">Артикул</label><input type="text" class="aform-input" id="afSku" placeholder="NIKE-001"></div>
+      <div class="aform-group">
+        <label class="aform-label">Фото <span>*</span> <span style="font-weight:400;color:#666;text-transform:none;font-size:10px;">(первое — главное)</span></label>
+        <div class="img-list" id="aImgList"></div>
+        <div class="photo-btns">
+          <button class="btn-upload" id="btnUpload" type="button">📷 Загрузить фото</button>
+          <button class="btn-add-img-row" type="button" data-act="addImgRow">+ Ссылка / имя файла</button>
+        </div>
+        <input type="file" id="fileInput" accept="image/*" multiple style="display:none;">
+      </div>
+      <div class="aform-group">
+        <label class="aform-label">Размеры <span>*</span></label>
+        <div class="sz-row">
+          <input type="text" class="aform-input" id="aSzInput" placeholder="S, M, L или 42...">
+          <button class="btn-sz-add" type="button" data-act="addSize">+ Добавить</button>
+        </div>
+        <div class="sz-tags" id="aSzTags"></div>
+      </div>
+      <div class="amodal-actions">
+        <button class="btn-acancel" type="button" data-act="closeModal">Отмена</button>
+        <button class="btn-asave" type="button" id="btnSave" data-act="saveProduct">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIRM -->
+  <div class="adel-overlay" id="confirmOverlay">
+    <div class="adel-box">
+      <div class="adel-icon">🗑️</div>
+      <div class="adel-text" id="confirmText">Удалить?</div>
+      <div class="adel-sub" id="confirmSub">—</div>
+      <div class="adel-btns">
+        <button class="btn-adel-no" data-act="confirmNo">Отмена</button>
+        <button class="btn-adel-yes" data-act="confirmYes">Удалить</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toastNode"></div>
+
+  <script>
+    // ══════════ НАСТРОЙКИ ══════════
+    const SUPABASE_URL = 'https://zbtjttnbvmjgkrxpkmnh.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_cEEDSjuguL4wwAyNAhfXwQ_C40q5_fx';
+    // Адрес, где лежит магазин (например 'https://albertshop.netlify.app').
+    // Нужен, чтобы старые фото-имена (palm.jpg) показывались и в админке. Можно оставить пустым.
+    const SHOP_URL = 'https://r99373215-design.github.io/alibert1/';
+    const BUCKET = 'photos';
+
+    const CATEGORIES = ['Футболки','Худи/Зипки','Куртки/Ветровки','Штаны/Джинсы','Шорты','Обувь','Головные уборы','Аксессуары','Другое'];
+    const DEFAULT_BRANDS = ['Palm Angels','Stone Island','C.P Company','Gucci','Balenciaga','Amiri','Maison Margiela','Dolce Gabbana','Bape'];
+    const STATUSES = ['Ожидает подтверждения','Подтверждён','Отправлен','Выполнен','Отменён'];
+
+    // ══════════ ХЕЛПЕРЫ ══════════
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const stArr = d => Array.isArray(d && d.status) ? d.status : (d && d.status ? [String(d.status)] : []);
+    const fmt = n => Number(n || 0).toLocaleString('ru-RU');
+    function imgSrc(s) {
+      s = String(s || '').trim();
+      if (!s) return '';
+      if (/^(https?:)?\/\//i.test(s) || s.startsWith('data:')) return s;
+      return SHOP_URL ? SHOP_URL.replace(/\/+$/, '') + '/' + s.replace(/^\/+/, '') : s;
+    }
+    function isSoldOut(p) { return p.stock !== undefined && p.stock <= 0; }
+    function toast(text, ok = false) {
+      const t = $('toastNode');
+      t.innerText = text; t.classList.toggle('success-toast', ok); t.classList.add('show');
+      clearTimeout(window.toastTimer);
+      window.toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+    }
+
+    // ══════════ СОСТОЯНИЕ ══════════
+    let sb = null;
+    let PRODUCTS = [], ORDERS = [], USERS = [], BRANDS = [...DEFAULT_BRANDS];
+    let editingId = null, curSizes = [], confirmCb = null;
+
+    // ══════════ ВХОД / ВЫХОД ══════════
+    function showLogin(msg) {
+      $('app').style.display = 'none';
+      $('loginScreen').style.display = 'flex';
+      $('loginErr').textContent = msg || '';
+    }
+    async function doLogin() {
+      const email = $('loginEmail').value.trim(), password = $('loginPass').value;
+      if (!email || !password) { $('loginErr').textContent = 'Введите email и пароль'; return; }
+      $('loginBtn').disabled = true; $('loginErr').textContent = '';
+      try {
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) {
+          $('loginErr').textContent = /invalid login/i.test(error.message) ? 'Неверный email или пароль' : error.message;
+        } else {
+          $('loginPass').value = '';
+          await enterApp();
+        }
+      } catch (e) { $('loginErr').textContent = 'Нет связи с сервером: ' + (e.message || e); }
+      $('loginBtn').disabled = false;
+    }
+    async function doLogout() { try { await sb.auth.signOut(); } catch (e) {} showLogin(); }
+
+    async function enterApp() {
+      $('loginScreen').style.display = 'none';
+      $('app').style.display = 'block';
+      await refreshAll();
+    }
+    async function refreshAll() {
+      await Promise.all([loadProducts(), loadBrands(), loadOrders(), loadUsers(), loadUserStats()]);
+      renderAll();
+    }
+
+    // ══════════ ЗАГРУЗКА ДАННЫХ ══════════
+    async function loadProducts() {
+      const { data, error } = await sb.from('products').select('id,data').order('id', { ascending: false });
+      if (error) { toast('Товары: ' + error.message); return; }
+      PRODUCTS = (data || []).map(r => ({ ...r.data, id: Number(r.id) }));
+    }
+    async function loadBrands() {
+      const { data, error } = await sb.from('settings').select('value').eq('key', 'brands').maybeSingle();
+      if (error) { toast('Бренды: ' + error.message); return; }
+      BRANDS = data && Array.isArray(data.value) ? data.value : [...DEFAULT_BRANDS];
+    }
+    async function loadOrders() {
+      const { data, error } = await sb.from('orders').select('id,created_at,data').order('created_at', { ascending: false }).limit(200);
+      if (error) { toast('Заказы: ' + error.message); return; }
+      ORDERS = data || [];
+    }
+    let userQuery = '', userFilter = 'all', USER_STATS = { total: 0, banned: 0 };
+    async function loadUsers() {
+      let q = sb.from('shop_users').select('*').order('last_seen', { ascending: false }).limit(100);
+      if (userFilter === 'tg') q = q.not('id', 'like', 'web_%');
+      if (userFilter === 'banned') q = q.eq('banned', true);
+      const term = userQuery.trim().replace(/^@/, '').replace(/[,()%*\\]/g, '');
+      if (term) q = q.or(`id.ilike.%${term}%,name.ilike.%${term}%,username.ilike.%${term}%`);
+      const { data, error } = await q;
+      if (error) { toast('Клиенты: ' + error.message); return; }
+      USERS = data || [];
+    }
+    async function loadUserStats() {
+      const [t, b] = await Promise.all([
+        sb.from('shop_users').select('id', { count: 'exact', head: true }),
+        sb.from('shop_users').select('id', { count: 'exact', head: true }).eq('banned', true)
+      ]);
+      USER_STATS = { total: t.count || 0, banned: b.count || 0 };
+    }
+
+    // ══════════ ОТРИСОВКА ══════════
+    function renderAll() { renderStats(); renderProducts(); renderOrders(); renderUsers(); renderBrands(); }
+
+    function renderStats() {
+      const cats = new Set(PRODUCTS.map(p => p.category)).size;
+      const COUNTED = ['Подтверждён', 'Отправлен', 'Выполнен'];
+      const revenue = ORDERS.filter(o => COUNTED.includes(stArr(o.data).slice(-1)[0]))
+        .reduce((x, o) => x + (Number(o.data && o.data.total) || 0), 0);
+      const st = (l, v, c) => `<div class="admin-stat"><div class="admin-stat-label">${l}</div><div class="admin-stat-val" style="color:${c}">${v}</div></div>`;
+      $('statsBox').innerHTML =
+        st('Товаров', PRODUCTS.length, 'var(--accent)') +
+        st('Категорий', cats, '#ffcc00') +
+        st('Заказов', ORDERS.length, 'var(--accent)') +
+        st('Выручка (подтв.)', fmt(revenue) + ' ₽', '#ffcc00') +
+        st('Клиентов', USER_STATS.total, '#3cc98d') +
+        st('Забанено', USER_STATS.banned, 'var(--error)');
+    }
+
+    function legacyProducts() {
+      try {
+        const v = JSON.parse(localStorage.getItem('shopProducts') || 'null');
+        return Array.isArray(v) ? v.filter(p => p && p.id && p.name && Array.isArray(p.images) && Array.isArray(p.sizes)) : [];
+      } catch (e) { return []; }
+    }
+    function renderProducts() {
+      const have = new Set(PRODUCTS.map(p => p.id));
+      const legacy = legacyProducts().filter(p => !have.has(Number(p.id)));
+      $('importBox').innerHTML = legacy.length
+        ? `<div class="import-box">📥 В этом браузере найдено старых товаров: <b>${legacy.length}</b> (из прежней админки). Их можно перенести в общую базу.<br><button class="btn-admin-add" data-act="importLegacy">Импортировать</button></div>`
+        : '';
+      const list = $('adminProdList');
+      if (!PRODUCTS.length) { list.innerHTML = '<div class="empty-state">Товаров пока нет. Нажмите «+ Добавить».</div>'; return; }
+      list.innerHTML = PRODUCTS.map(p => {
+        const sold = isSoldOut(p);
+        const img = p.images && p.images[0]
+          ? `<img src="${esc(imgSrc(p.images[0]))}" class="admin-prod-img" onerror="this.style.display='none'">`
+          : `<div class="admin-prod-placeholder">🖼️</div>`;
+        const sizes = (p.sizes || []).map(s => `<span class="atag atag-size">${esc(s)}</span>`).join('');
+        return `<div class="admin-prod-card">${img}<div>
+          <div class="admin-prod-name">${esc(p.name)}</div>
+          <div class="admin-prod-meta">Остаток: ${esc(p.stock)} шт. · Арт: ${esc(p.sku || '—')}</div>
+          <div class="admin-prod-tags"><span class="atag atag-cat">${esc(p.category)}</span>${p.brand ? `<span class="atag atag-size">${esc(p.brand)}</span>` : ''}${p.condition ? `<span class="atag atag-size">${esc(p.condition)}</span>` : ''}<span class="atag atag-price">${fmt(p.price)} ₽</span>${sold ? '<span class="atag atag-sold">Продано</span>' : ''}${sizes}</div>
+        </div><div class="admin-prod-btns">
+          <button class="btn-a-edit" data-act="editProduct" data-id="${p.id}">✏️ Изменить</button>
+          <button class="btn-a-edit" data-act="copyLink" data-id="${p.id}">🔗 Ссылка</button>
+          <button class="btn-a-del" data-act="delProduct" data-id="${p.id}">🗑️ Удалить</button>
+        </div></div>`;
+      }).join('');
+    }
+
+    function renderOrders() {
+      const box = $('ordersList');
+      if (!ORDERS.length) { box.innerHTML = '<div class="empty-state">Заказов пока нет</div>'; return; }
+      box.innerHTML = ORDERS.map(o => {
+        const d = o.data || {};
+        const cur = stArr(d).slice(-1)[0] || '';
+        const opts = (STATUSES.includes(cur) || !cur ? STATUSES : [cur, ...STATUSES])
+          .map(s => `<option${s === cur ? ' selected' : ''}>${esc(s)}</option>`).join('');
+        const items = (d.items || []).map(i => `<div class="ord-item"><span>${esc(i.name)}</span><span>${esc(i.qty)} × ${fmt(i.price)} ₽</span></div>`).join('');
+        const tgName = String(d.tg || '').replace(/^@/, '');
+        const tg = tgName ? `<a href="https://t.me/${esc(tgName)}" target="_blank">@${esc(tgName)}</a>` : '—';
+        const acc = d.tgUsername ? ` · аккаунт @${esc(d.tgUsername)}` : '';
+        return `<div class="box">
+          <div class="ord-head"><b>Заказ ${esc(o.id)}</b><span class="ord-total">${fmt(d.total)} ₽</span></div>
+          <div class="ord-meta">📅 ${esc(d.date || new Date(o.created_at).toLocaleString('ru-RU'))}</div>
+          <div class="ord-meta">👤 ${esc(d.fio || '—')} · 📞 <a href="tel:${esc(d.phone)}">${esc(d.phone || '—')}</a></div>
+          <div class="ord-meta">✈️ ${tg}${acc}</div>
+          <div class="ord-meta">🚚 ${esc(d.delivery || '—')} · ${esc(d.address || '—')}</div>
+          <div class="ord-meta">💳 ${esc(d.payMethod || '—')}</div>
+          ${items}
+          <div class="ord-actions"><select class="aform-select ord-status" data-id="${esc(o.id)}">${opts}</select><button class="btn-a-del" data-act="delOrder" data-id="${esc(o.id)}">🗑️</button></div>
+        </div>`;
+      }).join('');
+    }
+
+    function renderUsers() {
+      const box = $('usersList');
+      $('usersCount').textContent = USERS.length ? `Найдено: ${USERS.length}${USERS.length >= 100 ? ' (показаны первые 100, уточните поиск)' : ''}` : '';
+      if (!USERS.length) { box.innerHTML = '<div class="empty-state" style="padding:16px;">' + (userQuery.trim() ? 'Никого не нашли' : 'Пока никого') + '</div>'; return; }
+      box.innerHTML = USERS.map(u => `<div class="user-row"><div style="min-width:0;">
+          <b>${esc(u.name || 'Гость')}</b> ${u.username ? '@' + esc(u.username) : ''}${u.banned ? ' 🚫' : ''}
+          <div class="user-sub">id ${esc(u.id)} · визитов ${esc(u.visits)} · ${esc(new Date(u.last_seen).toLocaleDateString('ru-RU'))}</div>
+        </div><button class="${u.banned ? 'btn-a-ok' : 'btn-a-del'}" data-act="toggleBan" data-id="${esc(u.id)}">${u.banned ? 'Разбан' : 'Бан'}</button></div>`).join('');
+    }
+
+    function renderBrands() {
+      $('brandChips').innerHTML = BRANDS.map((b, i) => `<span class="chip">${esc(b)}<b data-act="delBrand" data-idx="${i}">×</b></span>`).join('')
+        || '<div class="empty-state" style="padding:8px;">Брендов нет</div>';
+      $('afBrandList').innerHTML = BRANDS.map(b => `<option value="${esc(b)}"></option>`).join('');
+    }
+
+    // ══════════ ТОВАРЫ: МОДАЛКА ══════════
+    function fillCategorySelect() {
+      $('afCat').innerHTML = CATEGORIES.map(c => `<option>${esc(c)}</option>`).join('');
+    }
+    function openModal(id = null) {
+      editingId = id; curSizes = [];
+      $('aImgList').innerHTML = ''; $('aSzTags').innerHTML = '';
+      $('aModalTitle').innerText = id ? 'Редактировать товар' : 'Добавить товар';
+      if (id) {
+        const p = PRODUCTS.find(x => x.id === id); if (!p) return;
+        $('afName').value = p.name || ''; $('afPrice').value = p.price ?? ''; $('afStock').value = p.stock ?? 1;
+        const sel = $('afCat');
+        if (p.category && ![...sel.options].some(o => o.value === p.category)) {
+          const op = document.createElement('option'); op.textContent = p.category; sel.appendChild(op);
+        }
+        sel.value = p.category || CATEGORIES[0];
+        $('afDesc').value = p.desc || ''; $('afSku').value = p.sku || '';
+        $('afBrand').value = p.brand || ''; $('afCondition').value = p.condition || ''; $('afComplect').value = p.complect || '';
+        curSizes = [...(p.sizes || [])];
+        (p.images || []).forEach(i => addImgRow(i));
+      } else {
+        ['afName', 'afPrice', 'afDesc', 'afSku', 'afBrand', 'afCondition', 'afComplect'].forEach(f => $(f).value = '');
+        $('afStock').value = '1'; $('afCat').value = CATEGORIES[0];
+      }
+      renderSizes();
+      $('aModalOverlay').classList.add('show');
+    }
+    function closeModal() { $('aModalOverlay').classList.remove('show'); }
+
+    function addImgRow(val = '') {
+      const row = document.createElement('div'); row.className = 'img-row';
+      const th = document.createElement('img'); th.className = 'img-thumb';
+      const inp = document.createElement('input'); inp.type = 'text'; inp.className = 'aform-input aimg-input';
+      inp.placeholder = 'ссылка или имя файла'; inp.value = val;
+      const rm = document.createElement('button'); rm.type = 'button'; rm.className = 'btn-rm-img'; rm.textContent = '✕';
+      rm.onclick = () => row.remove();
+      const upd = () => { const v = inp.value.trim(); if (v) { th.src = imgSrc(v); th.style.visibility = 'visible'; } else { th.style.visibility = 'hidden'; } };
+      th.onerror = () => { th.style.visibility = 'hidden'; };
+      inp.addEventListener('input', upd);
+      row.append(th, inp, rm);
+      $('aImgList').appendChild(row);
+      upd();
+    }
+    function addSize() {
+      const inp = $('aSzInput'), val = inp.value.trim(); if (!val) return;
+      val.split(',').forEach(s => { const t = s.trim(); if (t && !curSizes.includes(t)) curSizes.push(t); });
+      inp.value = ''; renderSizes();
+    }
+    function renderSizes() {
+      $('aSzTags').innerHTML = curSizes.map(s => `<div class="sz-tag">${esc(s)}<span class="sz-x" data-act="rmSize" data-size="${esc(s)}">✕</span></div>`).join('');
+    }
+
+    // ══════════ ЗАГРУЗКА ФОТО ══════════
+    function compress(file, maxSide = 1600, quality = 0.85) {
+      return new Promise(resolve => {
+        if (!file.type.startsWith('image/') || file.type === 'image/gif') { resolve(file); return; }
+        const url = URL.createObjectURL(file); const img = new Image();
+        img.onload = () => {
+          let w = img.width, h = img.height;
+          const k = Math.min(1, maxSide / Math.max(w, h)); w = Math.round(w * k); h = Math.round(h * k);
+          const c = document.createElement('canvas'); c.width = w; c.height = h;
+          const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+          URL.revokeObjectURL(url);
+          c.toBlob(b => resolve(b || file), 'image/jpeg', quality);
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+        img.src = url;
+      });
+    }
+    async function uploadPhoto(file) {
+      const blob = await compress(file);
+      const ext = blob.type === 'image/jpeg' ? 'jpg' : ((file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg');
+      const path = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: blob.type || 'image/jpeg', cacheControl: '31536000' });
+      if (error) throw error;
+      return sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+    }
+
+    // ══════════ ТОВАРЫ: СОХРАНЕНИЕ / УДАЛЕНИЕ ══════════
+    async function saveProduct() {
+      const name = $('afName').value.trim();
+      const price = parseInt($('afPrice').value);
+      const stock = parseInt($('afStock').value) || 0;
+      const images = [...document.querySelectorAll('.aimg-input')].map(i => i.value.trim()).filter(Boolean);
+      if (!name) { toast('Введите название!'); return; }
+      if (!price || price <= 0) { toast('Введите цену!'); return; }
+      if (!images.length) { toast('Добавьте фото!'); return; }
+      if (!curSizes.length) { toast('Добавьте размеры!'); return; }
+      const old = editingId ? PRODUCTS.find(p => p.id === editingId) : null;
+      const id = editingId || Date.now();
+      const p = {
+        ...(old || {}), id, name, price, stock, images, sizes: [...curSizes],
+        category: $('afCat').value, brand: $('afBrand').value.trim(), condition: $('afCondition').value.trim(),
+        complect: $('afComplect').value.trim(), desc: $('afDesc').value.trim(), sku: $('afSku').value.trim()
+      };
+      const btn = $('btnSave'); btn.disabled = true; btn.textContent = 'Сохраняю...';
+      const { error } = await sb.from('products').upsert({ id, data: p });
+      btn.disabled = false; btn.textContent = 'Сохранить';
+      if (error) { toast('Не сохранилось: ' + error.message); return; }
+      const idx = PRODUCTS.findIndex(x => x.id === id);
+      if (idx >= 0) PRODUCTS[idx] = p; else PRODUCTS.unshift(p);
+      renderStats(); renderProducts(); closeModal();
+      toast(editingId ? 'Обновлено ✅' : 'Добавлено ✅', true);
+    }
+    async function deleteProduct(id) {
+      const { error } = await sb.from('products').delete().eq('id', id);
+      if (error) { toast('Не удалилось: ' + error.message); return; }
+      PRODUCTS = PRODUCTS.filter(p => p.id !== id);
+      renderStats(); renderProducts(); toast('Удалено', true);
+    }
+    async function importLegacy() {
+      const have = new Set(PRODUCTS.map(p => p.id));
+      const list = legacyProducts().filter(p => !have.has(Number(p.id)));
+      if (!list.length) return;
+      const { error } = await sb.from('products').upsert(list.map(p => ({ id: Number(p.id), data: { ...p, id: Number(p.id) } })));
+      if (error) { toast('Импорт не удался: ' + error.message); return; }
+      await loadProducts(); renderStats(); renderProducts();
+      toast('Импортировано: ' + list.length, true);
+    }
+
+    // ══════════ ЗАКАЗЫ / КЛИЕНТЫ / БРЕНДЫ ══════════
+    async function updateOrderStatus(id, value) {
+      const o = ORDERS.find(x => x.id === id); if (!o) return;
+      const data = { ...o.data, status: [value] };
+      const { data: rows, error } = await sb.from('orders').update({ data }).eq('id', id).select('id');
+      if (error) { toast('Не сохранилось: ' + error.message); renderOrders(); return; }
+      if (!rows || !rows.length) { toast('Статус не сохранился: нет доступа. Выйдите и войдите снова.'); renderOrders(); return; }
+      o.data = data; renderStats(); toast('Статус обновлён ✅', true);
+    }
+    async function deleteOrder(id) {
+      const { error } = await sb.from('orders').delete().eq('id', id);
+      if (error) { toast('Не удалилось: ' + error.message); return; }
+      ORDERS = ORDERS.filter(o => o.id !== id); renderStats(); renderOrders(); toast('Заказ удалён', true);
+    }
+    async function toggleBan(id) {
+      const u = USERS.find(x => x.id === id); if (!u) return;
+      const banned = !u.banned;
+      const { error } = await sb.from('shop_users').update({ banned }).eq('id', id);
+      if (error) { toast('Не сохранилось: ' + error.message); return; }
+      u.banned = banned;
+      USER_STATS.banned += banned ? 1 : -1;
+      if (userFilter === 'banned' && !banned) USERS = USERS.filter(x => x.id !== id);
+      renderStats(); renderUsers();
+      toast(banned ? 'Пользователь забанен' : 'Пользователь разбанен', true);
+    }
+    async function saveBrands() {
+      const { error } = await sb.from('settings').upsert({ key: 'brands', value: BRANDS });
+      if (error) { toast('Не сохранилось: ' + error.message); await loadBrands(); renderBrands(); return false; }
+      return true;
+    }
+    async function addBrand() {
+      const v = $('brandInput').value.trim(); if (!v) return;
+      if (!BRANDS.some(b => b.toLowerCase() === v.toLowerCase())) BRANDS.push(v);
+      $('brandInput').value = '';
+      renderBrands();
+      if (await saveBrands()) toast('Бренд добавлен', true);
+    }
+    async function deleteBrand(i) {
+      BRANDS.splice(i, 1); renderBrands(); await saveBrands();
+    }
+
+    // ══════════ ССЫЛКА НА ТОВАР ══════════
+    function productLink(id) { return SHOP_URL.replace(/\/+$/, '') + '/#p' + id; }
+    function copyLink(id) {
+      const link = productLink(id);
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = link; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); toast('Ссылка скопирована!', true); }
+        catch (err) { toast(link); }
+        document.body.removeChild(ta);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(() => toast('Ссылка скопирована!', true)).catch(fallback);
+      } else { fallback(); }
+    }
+
+    // ══════════ РАССЫЛКА ══════════
+    let bcPhoto = '';
+    function renderBcPhoto() {
+      $('bcPhotoBox').innerHTML = bcPhoto ? `<img src="${esc(bcPhoto)}" style="max-width:100%;max-height:160px;border-radius:10px;">` : '';
+    }
+    async function loadBcCount() {
+      const { data, error } = await sb.rpc('broadcast_count');
+      $('bcCount').textContent = error ? 'Получателей: не удалось узнать (' + error.message + ')' : 'Получателей: ' + data;
+      return error ? 0 : Number(data);
+    }
+    async function sendBroadcast() {
+      const text = $('bcText').value.trim();
+      if (!text) { toast('Введите текст!'); return; }
+      if (bcPhoto && text.length > 1000) { toast('С фото текст до 1000 символов'); return; }
+      const only = $('bcOnly').value.trim();
+      const btnText = $('bcBtnText').value.trim();
+      const btnUrl = $('bcBtnUrl').value.trim() || SHOP_URL;
+      const total = only ? only.split(',').filter(x => x.trim()).length : await loadBcCount();
+      if (!total) { toast('Нет получателей'); return; }
+      askConfirm('Отправить рассылку?', `Получателей: ${total}${only ? ' (тест)' : ''}`, async () => {
+        const btn = $('bcSend'); btn.disabled = true;
+        const args = { p_text: text, p_photo: bcPhoto, p_btn_text: btnText, p_btn_url: btnText ? btnUrl : '', p_only: only };
+        let sent = 0, failed = false;
+        try {
+          if (only) {
+            const { error } = await sb.rpc('broadcast_batch', { ...args, p_offset: 0, p_limit: 100 });
+            if (error) throw error; sent = total;
+          } else {
+            for (let off = 0; off < total; off += 20) {
+              $('bcProgress').textContent = `Отправка… ${Math.min(off, total)} из ${total}`;
+              const { error } = await sb.rpc('broadcast_batch', { ...args, p_offset: off, p_limit: 20 });
+              if (error) throw error;
+              sent = Math.min(off + 20, total);
+              await new Promise(r => setTimeout(r, 1100));
+            }
+          }
+        } catch (e) { failed = true; toast('Ошибка рассылки: ' + (e.message || e)); }
+        $('bcProgress').textContent = failed ? `Остановлено на ${sent} из ${total}` : `Готово: отправлено ${sent} из ${total}`;
+        btn.disabled = false;
+        if (!failed) toast('Рассылка отправлена ✅', true);
+      });
+    }
+    let userSearchTimer = null;
+    $('userSearch').addEventListener('input', e => {
+      userQuery = e.target.value;
+      clearTimeout(userSearchTimer);
+      userSearchTimer = setTimeout(() => loadUsers().then(renderUsers), 300);
+    });
+    $('bcUpload').addEventListener('click', () => $('bcFile').click());
+    $('bcFile').addEventListener('change', async e => {
+      const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+      $('bcUpload').disabled = true;
+      try { bcPhoto = await uploadPhoto(f); renderBcPhoto(); toast('Фото загружено', true); }
+      catch (err) { toast('Фото не загрузилось: ' + (err.message || err)); }
+      $('bcUpload').disabled = false;
+    });
+
+    // ══════════ ПОДТВЕРЖДЕНИЕ ══════════
+    function askConfirm(text, sub, cb) {
+      $('confirmText').innerText = text; $('confirmSub').innerText = sub; confirmCb = cb;
+      $('confirmOverlay').classList.add('show');
+    }
+    function closeConfirm() { $('confirmOverlay').classList.remove('show'); confirmCb = null; }
+
+    // ══════════ СОБЫТИЯ ══════════
+    document.addEventListener('click', e => {
+      const b = e.target.closest('[data-act]');
+      if (!b) return;
+      const act = b.dataset.act, id = b.dataset.id;
+      switch (act) {
+        case 'addProduct': openModal(); break;
+        case 'editProduct': openModal(Number(id)); break;
+        case 'delProduct': {
+          const p = PRODUCTS.find(x => String(x.id) === id); if (!p) break;
+          askConfirm('Удалить товар?', '"' + p.name + '"', () => deleteProduct(p.id)); break;
+        }
+        case 'closeModal': closeModal(); break;
+        case 'saveProduct': saveProduct(); break;
+        case 'addImgRow': addImgRow(''); break;
+        case 'addSize': addSize(); break;
+        case 'rmSize': curSizes = curSizes.filter(x => x !== b.dataset.size); renderSizes(); break;
+        case 'importLegacy': importLegacy(); break;
+        case 'copyLink': copyLink(Number(id)); break;
+        case 'bcSend': sendBroadcast(); break;
+        case 'userFilter': {
+          userFilter = b.dataset.f;
+          document.querySelectorAll('.fchip').forEach(x => x.classList.toggle('active', x === b));
+          loadUsers().then(renderUsers); break;
+        }
+        case 'bcClearPhoto': bcPhoto = ''; renderBcPhoto(); break;
+        case 'delOrder': askConfirm('Удалить заказ?', id, () => deleteOrder(id)); break;
+        case 'toggleBan': toggleBan(id); break;
+        case 'addBrand': addBrand(); break;
+        case 'delBrand': deleteBrand(Number(b.dataset.idx)); break;
+        case 'refresh': refreshAll().then(() => toast('Обновлено', true)); break;
+        case 'logout': doLogout(); break;
+        case 'confirmYes': { const cb = confirmCb; closeConfirm(); if (cb) cb(); break; }
+        case 'confirmNo': closeConfirm(); break;
+      }
+    });
+    document.addEventListener('change', e => {
+      if (e.target.classList.contains('ord-status')) updateOrderStatus(e.target.dataset.id, e.target.value);
+    });
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', async () => {
+      document.querySelectorAll('.tab-btn').forEach(x => x.classList.toggle('active', x === btn));
+      try { btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); } catch (e) {}
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      $('panel' + btn.dataset.tab).classList.add('active');
+      if (btn.dataset.tab === 'Orders') { await loadOrders(); renderOrders(); renderStats(); }
+      if (btn.dataset.tab === 'Users') { await Promise.all([loadUsers(), loadUserStats()]); renderUsers(); renderStats(); }
+      if (btn.dataset.tab === 'Broadcast') { if (!$('bcBtnUrl').value) $('bcBtnUrl').value = SHOP_URL; loadBcCount(); }
+    }));
+    $('btnUpload').addEventListener('click', () => $('fileInput').click());
+    $('fileInput').addEventListener('change', async e => {
+      const files = [...e.target.files]; e.target.value = '';
+      if (!files.length) return;
+      const btn = $('btnUpload'); btn.disabled = true; let ok = 0;
+      for (let i = 0; i < files.length; i++) {
+        btn.textContent = `Загрузка ${i + 1}/${files.length}...`;
+        try { addImgRow(await uploadPhoto(files[i])); ok++; }
+        catch (err) { toast('Фото не загрузилось: ' + (err.message || err)); }
+      }
+      btn.disabled = false; btn.textContent = '📷 Загрузить фото';
+      if (ok) toast('Загружено фото: ' + ok, true);
+    });
+    $('aSzInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addSize(); } });
+    $('brandInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addBrand(); } });
+    $('loginBtn').addEventListener('click', doLogin);
+    $('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+    $('aModalOverlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+    $('confirmOverlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeConfirm(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeConfirm(); } });
+
+    // ══════════ СТАРТ ══════════
+    async function init() {
+      try { window.Telegram?.WebApp?.ready(); window.Telegram?.WebApp?.expand(); } catch (e) {}
+      fillCategorySelect(); renderBrands();
+      if (SHOP_URL) { const a = $('backShop'); a.href = SHOP_URL; a.target = '_blank'; a.style.display = 'inline-flex'; }
+      if (typeof supabase === 'undefined') {
+        showLogin('Не загрузилась библиотека Supabase. Проверьте интернет (или VPN) и обновите страницу.');
+        $('loginBtn').disabled = true; return;
+      }
+      sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      sb.auth.onAuthStateChange(ev => { if (ev === 'SIGNED_OUT') showLogin(); });
+      try {
+        const { data } = await sb.auth.getSession();
+        if (data && data.session) await enterApp(); else showLogin();
+      } catch (e) { showLogin(); }
+    }
+    init();
+  </script>
+</body>
+</html>
